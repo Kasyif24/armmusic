@@ -1,0 +1,1079 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>AR MUSIC SYSTEM // CYBERPUNK</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<script src="https://cdn.jsdelivr.net/npm/gsap@3/dist/gsap.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/howler@2/dist/howler.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<style>
+:root {
+  --neon-green: #00ff88;
+  --neon-blue: #00e5ff;
+  --neon-pink: #ff0066;
+  --bg-dark: #060610;
+  --glass-bg: rgba(6, 6, 16, 0.45);
+  --glass-border: rgba(0, 255, 136, 0.2);
+  --text-primary: #e8e8f0;
+  --text-dim: rgba(255,255,255,0.45);
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg-dark);font-family:'Rajdhani',sans-serif;color:var(--text-primary);-webkit-tap-highlight-color:transparent}
+body{position:relative}
+
+/* === LOADING SCREEN === */
+#loading-screen{position:fixed;inset:0;z-index:9999;background:var(--bg-dark);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:24px}
+.loader-hex{width:80px;height:80px;position:relative}
+.loader-hex::before,.loader-hex::after{content:'';position:absolute;inset:0;border:2px solid var(--neon-green);border-radius:50%;animation:loaderSpin 2s linear infinite}
+.loader-hex::after{inset:10px;border-color:var(--neon-blue);animation-direction:reverse;animation-duration:1.5s}
+@keyframes loaderSpin{to{transform:rotate(360deg)}}
+.loader-title{font-family:'Orbitron',monospace;font-size:clamp(14px,3vw,22px);font-weight:700;letter-spacing:6px;color:var(--neon-green);text-shadow:0 0 20px rgba(0,255,136,0.4)}
+.loader-sub{font-size:14px;color:var(--text-dim);letter-spacing:2px}
+.loader-bar{width:200px;height:2px;background:rgba(255,255,255,0.08);border-radius:2px;overflow:hidden}
+.loader-fill{height:100%;width:0%;background:linear-gradient(90deg,var(--neon-green),var(--neon-blue));border-radius:2px;transition:width 0.3s}
+.loader-status{font-family:'Orbitron',monospace;font-size:11px;color:var(--neon-blue);letter-spacing:1px;min-height:16px}
+
+/* === AR CONTAINER === */
+#ar-container{position:fixed;inset:0;display:none}
+#webcam{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1);filter:brightness(0.7) contrast(1.1) saturate(0.8)}
+#hand-canvas{position:absolute;inset:0;width:100%;height:100%;transform:scaleX(-1);pointer-events:none;z-index:2}
+
+/* === OVERLAY EFEK === */
+.scan-line{position:fixed;left:0;width:100%;height:2px;background:linear-gradient(90deg,transparent,var(--neon-green),var(--neon-blue),var(--neon-green),transparent);opacity:0.15;z-index:3;pointer-events:none;animation:scanMove 4s linear infinite;box-shadow:0 0 20px var(--neon-green),0 0 60px var(--neon-green)}
+@keyframes scanMove{0%{top:-2px}100%{top:100%}}
+.vignette{position:fixed;inset:0;z-index:3;pointer-events:none;background:radial-gradient(ellipse at center,transparent 40%,rgba(0,0,0,0.65) 100%)}
+.grid-overlay{position:fixed;inset:0;z-index:3;pointer-events:none;opacity:0.03;background-image:linear-gradient(rgba(0,255,136,0.3) 1px,transparent 1px),linear-gradient(90deg,rgba(0,255,136,0.3) 1px,transparent 1px);background-size:60px 60px}
+
+/* === HUD CORNER BRACKETS === */
+.hud-corner{position:fixed;z-index:10;pointer-events:none}
+.hud-corner::before,.hud-corner::after{content:'';position:absolute;background:var(--neon-green);box-shadow:0 0 8px var(--neon-green)}
+.hud-corner.tl{top:16px;left:16px}.hud-corner.tl::before{width:40px;height:2px;top:0;left:0}.hud-corner.tl::after{width:2px;height:40px;top:0;left:0}
+.hud-corner.tr{top:16px;right:16px}.hud-corner.tr::before{width:40px;height:2px;top:0;right:0}.hud-corner.tr::after{width:2px;height:40px;top:0;right:0}
+.hud-corner.bl{bottom:16px;left:16px}.hud-corner.bl::before{width:40px;height:2px;bottom:0;left:0}.hud-corner.bl::after{width:2px;height:40px;bottom:0;left:0}
+.hud-corner.br{bottom:16px;right:16px}.hud-corner.br::before{width:40px;height:2px;bottom:0;right:0}.hud-corner.br::after{width:2px;height:40px;bottom:0;right:0}
+
+/* === HUD TOP/BOTTOM === */
+.hud-top{position:fixed;top:20px;left:70px;right:70px;display:flex;justify-content:space-between;align-items:center;z-index:10;pointer-events:none;font-family:'Orbitron',monospace}
+.hud-status{display:flex;align-items:center;gap:8px;font-size:clamp(9px,1.5vw,12px);letter-spacing:2px;color:var(--neon-green)}
+.status-dot{width:6px;height:6px;border-radius:50%;background:var(--neon-green);box-shadow:0 0 8px var(--neon-green);animation:dotPulse 2s ease infinite}
+@keyframes dotPulse{0%,100%{opacity:1}50%{opacity:0.3}}
+.hud-time{font-size:clamp(9px,1.5vw,12px);color:var(--neon-blue);letter-spacing:2px;text-shadow:0 0 10px rgba(0,229,255,0.3)}
+.hud-bottom{position:fixed;bottom:20px;left:70px;right:70px;display:flex;justify-content:space-between;align-items:center;z-index:10;pointer-events:none;font-family:'Orbitron',monospace;font-size:clamp(9px,1.3vw,11px);letter-spacing:1px}
+.hud-fps{color:var(--text-dim)}.hud-fps span:last-child{color:var(--neon-green)}
+.hud-tracking{display:flex;align-items:center;gap:6px;color:var(--text-dim);transition:color 0.3s}
+.hud-tracking.active{color:var(--neon-green)}
+.tracking-dot{width:5px;height:5px;border-radius:50%;background:var(--text-dim);transition:all 0.3s}
+.hud-tracking.active .tracking-dot{background:var(--neon-green);box-shadow:0 0 8px var(--neon-green)}
+.hud-gesture-log{color:var(--neon-blue);text-align:right;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:0.7}
+
+/* === HUD SIDE TICKS === */
+.hud-side{position:fixed;top:50%;transform:translateY(-50%);z-index:10;pointer-events:none;display:flex;flex-direction:column;gap:4px}
+.hud-side.left{left:20px}.hud-side.right{right:20px}
+.side-tick{width:20px;height:1px;background:rgba(0,255,136,0.2)}
+.side-tick:nth-child(5n){width:30px;background:rgba(0,255,136,0.35)}
+
+/* === HUD RETICLE === */
+.hud-reticle{position:fixed;top:50%;left:50%;transform:translate(-50%,-55%);width:clamp(340px,50vw,480px);height:clamp(340px,50vw,480px);border:1px solid rgba(0,255,136,0.06);border-radius:50%;z-index:4;pointer-events:none;animation:reticleRotate 20s linear infinite}
+.hud-reticle::before{content:'';position:absolute;inset:-20px;border:1px dashed rgba(0,229,255,0.04);border-radius:50%;animation:reticleRotate 30s linear infinite reverse}
+@keyframes reticleRotate{to{transform:translate(-50%,-55%) rotate(360deg)}}
+/* Perbaikan: rotasi reticle tidak mengubah posisi */
+.hud-reticle{animation:none}
+.hud-reticle::before{animation:reticleSpin 30s linear infinite reverse}
+@keyframes reticleSpin{to{transform:rotate(360deg)}}
+
+/* === MUSIC PLAYER === */
+#music-player{position:fixed;top:50%;left:50%;transform:translate(-50%,-58%);z-index:20;display:flex;flex-direction:column;align-items:center;gap:20px;width:100%;max-width:600px;padding:0 16px;pointer-events:none}
+#music-card{width:100%;max-width:380px;background:var(--glass-bg);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid var(--glass-border);border-radius:16px;overflow:hidden;pointer-events:auto;box-shadow:0 0 40px rgba(0,255,136,0.06),inset 0 1px 0 rgba(255,255,255,0.05);animation:cardFloat 6s ease-in-out infinite;transition:border-color 0.5s,box-shadow 0.5s}
+#music-card.glow-active{border-color:rgba(0,255,136,0.45);box-shadow:0 0 60px rgba(0,255,136,0.15),0 0 120px rgba(0,255,136,0.05),inset 0 1px 0 rgba(255,255,255,0.08)}
+@keyframes cardFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+.card-cover{position:relative;width:100%;aspect-ratio:1/1;overflow:hidden}
+.card-cover img{width:100%;height:100%;object-fit:cover;transition:transform 0.6s}
+#music-card:hover .card-cover img{transform:scale(1.05)}
+.cover-overlay{position:absolute;inset:0;background:linear-gradient(to top,rgba(6,6,16,0.95) 0%,rgba(6,6,16,0.3) 40%,transparent 70%);pointer-events:none}
+.cover-glow{position:absolute;bottom:-40px;left:50%;transform:translateX(-50%);width:200px;height:80px;background:var(--neon-green);filter:blur(60px);opacity:0;transition:opacity 0.8s;border-radius:50%}
+#music-card.glow-active .cover-glow{opacity:0.25}
+.card-body{padding:0 20px 20px}
+.card-title{font-family:'Orbitron',monospace;font-size:clamp(14px,2.5vw,18px);font-weight:700;letter-spacing:1px;color:#fff;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card-artist{font-size:14px;color:var(--neon-blue);letter-spacing:1px;margin-bottom:14px;font-weight:500}
+
+/* Progress Bar */
+.progress-container{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.progress-time{font-family:'Orbitron',monospace;font-size:10px;color:var(--text-dim);min-width:32px;letter-spacing:1px}
+.progress-time.right{text-align:right}
+.progress-track{flex:1;height:4px;background:rgba(255,255,255,0.08);border-radius:4px;position:relative;cursor:pointer;overflow:visible}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--neon-green),var(--neon-blue));border-radius:4px;width:0%;position:relative;transition:width 0.1s linear}
+.progress-dot{position:absolute;right:-5px;top:50%;transform:translateY(-50%);width:10px;height:10px;border-radius:50%;background:var(--neon-green);box-shadow:0 0 10px var(--neon-green),0 0 20px rgba(0,255,136,0.3);opacity:0;transition:opacity 0.3s}
+.progress-track:hover .progress-dot{opacity:1}
+
+/* Visualizer */
+.visualizer{display:flex;align-items:flex-end;justify-content:center;gap:2px;height:32px;margin-bottom:14px}
+.vis-bar{width:3px;border-radius:2px;background:var(--neon-green);transition:height 0.15s ease;box-shadow:0 0 4px rgba(0,255,136,0.3)}
+.visualizer.paused .vis-bar{height:3px!important;opacity:0.25}
+
+/* Controls */
+.card-controls{display:flex;align-items:center;justify-content:center;gap:20px}
+.ctrl-btn{background:none;border:1px solid rgba(255,255,255,0.12);color:var(--text-primary);width:40px;height:40px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;transition:all 0.25s}
+.ctrl-btn:hover{border-color:var(--neon-green);color:var(--neon-green);box-shadow:0 0 15px rgba(0,255,136,0.2)}
+.ctrl-btn:active{transform:scale(0.9)}
+.play-btn{width:50px;height:50px;font-size:16px;border-color:var(--neon-green);color:var(--neon-green);box-shadow:0 0 20px rgba(0,255,136,0.15)}
+.play-btn:hover{background:rgba(0,255,136,0.1);box-shadow:0 0 30px rgba(0,255,136,0.3)}
+
+/* === CAROUSEL === */
+#carousel-container{width:100%;max-width:700px;height:100px;position:relative;overflow:visible;pointer-events:auto}
+.carousel-card{position:absolute;top:0;left:50%;width:80px;height:80px;border-radius:10px;overflow:hidden;border:1px solid rgba(255,255,255,0.08);cursor:pointer;transition:filter 0.4s;will-change:transform,opacity}
+.carousel-card img{width:100%;height:100%;object-fit:cover}
+.carousel-card.active{border-color:var(--neon-green);box-shadow:0 0 20px rgba(0,255,136,0.3)}
+.carousel-card .card-label{position:absolute;bottom:0;left:0;right:0;padding:3px 5px;background:linear-gradient(transparent,rgba(0,0,0,0.85));font-size:8px;font-family:'Orbitron',monospace;letter-spacing:0.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-dim);transition:color 0.3s}
+.carousel-card.active .card-label{color:var(--neon-green)}
+
+/* === GESTURE INDICATOR === */
+#gesture-indicator{position:fixed;top:18%;left:50%;transform:translateX(-50%);z-index:30;pointer-events:none;text-align:center;opacity:0}
+.gesture-icon{font-size:36px;margin-bottom:4px;filter:drop-shadow(0 0 15px var(--neon-green))}
+.gesture-text{font-family:'Orbitron',monospace;font-size:13px;letter-spacing:3px;color:var(--neon-green);text-shadow:0 0 15px rgba(0,255,136,0.5)}
+
+/* === HAND PROMPT === */
+#hand-prompt{position:fixed;bottom:130px;left:50%;transform:translateX(-50%);z-index:15;display:flex;align-items:center;gap:10px;font-family:'Orbitron',monospace;font-size:11px;letter-spacing:2px;color:var(--text-dim);opacity:0;pointer-events:none}
+#hand-prompt i{font-size:20px;animation:handWave 2s ease-in-out infinite}
+@keyframes handWave{0%,100%{transform:rotate(0deg)}25%{transform:rotate(15deg)}75%{transform:rotate(-15deg)}}
+
+/* === INSTRUCTIONS === */
+.instruct-btn{position:fixed;bottom:20px;right:70px;z-index:25;pointer-events:auto!important;width:32px!important;height:32px!important;font-size:12px!important}
+#instructions{position:fixed;bottom:60px;right:20px;z-index:25;background:var(--glass-bg);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid var(--glass-border);border-radius:12px;padding:16px 20px;min-width:240px;pointer-events:auto;font-size:13px}
+#instructions h3{font-family:'Orbitron',monospace;font-size:11px;letter-spacing:3px;color:var(--neon-green);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid rgba(0,255,136,0.1)}
+.instr-item{display:flex;align-items:center;gap:10px;padding:5px 0;color:var(--text-dim)}
+.instr-item i{color:var(--neon-blue);width:18px;text-align:center;font-size:14px}
+
+/* === GESTURE FLASH === */
+.gesture-flash{position:fixed;inset:0;z-index:5;pointer-events:none;opacity:0}
+.gesture-flash.left{background:linear-gradient(to right,rgba(0,229,255,0.15),transparent 40%)}
+.gesture-flash.right{background:linear-gradient(to left,rgba(0,229,255,0.15),transparent 40%)}
+.gesture-flash.up{background:linear-gradient(to top,rgba(0,255,136,0.12),transparent 40%)}
+.gesture-flash.down{background:linear-gradient(to bottom,rgba(255,0,102,0.1),transparent 40%)}
+
+/* === ERROR FALLBACK === */
+#fallback-bg{position:fixed;inset:0;z-index:0;display:none;background:var(--bg-dark)}
+#fallback-bg .fb-grid{position:absolute;inset:0;opacity:0.04;background-image:linear-gradient(var(--neon-green) 1px,transparent 1px),linear-gradient(90deg,var(--neon-green) 1px,transparent 1px);background-size:80px 80px}
+
+/* === RESPONSIF === */
+@media(max-width:640px){
+  #music-card{max-width:300px}
+  .card-cover{aspect-ratio:1/1}
+  .card-title{font-size:13px}
+  .card-artist{font-size:12px}
+  .carousel-card{width:60px;height:60px}
+  #carousel-container{max-width:400px;height:75px}
+  .hud-top{left:50px;right:50px}
+  .hud-bottom{left:50px;right:50px;flex-wrap:wrap;gap:4px}
+  .hud-side{display:none}
+  .hud-corner.tl,.hud-corner.bl{left:10px}.hud-corner.tr,.hud-corner.br{right:10px}
+  .hud-corner.tl,.hud-corner.tr{top:10px}.hud-corner.bl,.hud-corner.br{bottom:10px}
+  .instruct-btn{right:50px}
+  #instructions{right:10px;min-width:200px;font-size:12px}
+  #hand-prompt{bottom:110px;font-size:10px}
+}
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:0.01ms!important;transition-duration:0.01ms!important}
+}
+</style>
+</head>
+<body>
+
+<!-- Loading Screen -->
+<div id="loading-screen">
+  <div class="loader-hex"></div>
+  <div class="loader-title">AR MUSIC SYSTEM</div>
+  <div class="loader-sub">CYBERPUNK EDITION v3.1</div>
+  <div class="loader-bar"><div class="loader-fill" id="loader-fill"></div></div>
+  <div class="loader-status" id="loader-status">Memuat modul...</div>
+</div>
+
+<!-- Fallback Background (jika kamera tidak tersedia) -->
+<div id="fallback-bg"><div class="fb-grid"></div></div>
+
+<!-- AR Container -->
+<div id="ar-container">
+  <video id="webcam" autoplay playsinline muted></video>
+  <canvas id="hand-canvas"></canvas>
+  <div class="scan-line"></div>
+  <div class="vignette"></div>
+  <div class="grid-overlay"></div>
+
+  <!-- HUD Corners -->
+  <div class="hud-corner tl"></div>
+  <div class="hud-corner tr"></div>
+  <div class="hud-corner bl"></div>
+  <div class="hud-corner br"></div>
+
+  <!-- HUD Top -->
+  <div class="hud-top">
+    <div class="hud-status"><span class="status-dot"></span>AR MUSIC SYSTEM</div>
+    <div class="hud-time" id="hud-time"></div>
+  </div>
+
+  <!-- HUD Bottom -->
+  <div class="hud-bottom">
+    <div class="hud-fps"><span>FPS </span><span id="fps-counter">--</span></div>
+    <div class="hud-tracking" id="hud-tracking"><span class="tracking-dot"></span><span id="tracking-text">NO HAND</span></div>
+    <div class="hud-gesture-log" id="gesture-log"></div>
+  </div>
+
+  <!-- HUD Side Ticks -->
+  <div class="hud-side left" id="side-left"></div>
+  <div class="hud-side right" id="side-right"></div>
+
+  <!-- HUD Reticle -->
+  <div class="hud-reticle"></div>
+
+  <!-- Gesture Flash -->
+  <div class="gesture-flash left" id="flash-left"></div>
+  <div class="gesture-flash right" id="flash-right"></div>
+  <div class="gesture-flash up" id="flash-up"></div>
+  <div class="gesture-flash down" id="flash-down"></div>
+
+  <!-- Music Player -->
+  <div id="music-player">
+    <div id="music-card">
+      <div class="card-cover">
+        <img id="card-cover-img" src="" alt="Album Cover">
+        <div class="cover-overlay"></div>
+        <div class="cover-glow"></div>
+      </div>
+      <div class="card-body">
+        <h2 class="card-title" id="card-title">--</h2>
+        <p class="card-artist" id="card-artist">--</p>
+        <div class="progress-container">
+          <span class="progress-time" id="time-current">0:00</span>
+          <div class="progress-track" id="progress-track">
+            <div class="progress-fill" id="progress-fill"><div class="progress-dot"></div></div>
+          </div>
+          <span class="progress-time right" id="time-total">0:00</span>
+        </div>
+        <div class="visualizer paused" id="visualizer"></div>
+        <div class="card-controls">
+          <button class="ctrl-btn" id="btn-prev" aria-label="Lagu sebelumnya"><i class="fas fa-backward-step"></i></button>
+          <button class="ctrl-btn play-btn" id="btn-play" aria-label="Play/Pause"><i class="fas fa-play" id="play-icon"></i></button>
+          <button class="ctrl-btn" id="btn-next" aria-label="Lagu berikutnya"><i class="fas fa-forward-step"></i></button>
+        </div>
+      </div>
+    </div>
+
+    <div id="carousel-container">
+      <div id="carousel-track"></div>
+    </div>
+  </div>
+
+  <!-- Gesture Indicator -->
+  <div id="gesture-indicator">
+    <div class="gesture-icon" id="gesture-icon"></div>
+    <div class="gesture-text" id="gesture-text"></div>
+  </div>
+
+  <!-- Hand Prompt -->
+  <div id="hand-prompt">
+    <i class="fas fa-hand"></i>
+    <span>TUNJUKKAN TANGAN ANDA</span>
+  </div>
+
+  <!-- Instructions Button -->
+  <button class="ctrl-btn instruct-btn" id="btn-instructions" aria-label="Panduan gestur"><i class="fas fa-question"></i></button>
+
+  <!-- Instructions Panel -->
+  <div id="instructions" style="display:none">
+    <h3>GESTURE CONTROL</h3>
+    <div class="instr-item"><i class="fas fa-hand-point-right"></i> Geser kanan &rarr; Lagu berikutnya</div>
+    <div class="instr-item"><i class="fas fa-hand-point-left"></i> Geser kiri &rarr; Lagu sebelumnya</div>
+    <div class="instr-item"><i class="fas fa-thumbs-up"></i> Jempol atas &rarr; Play</div>
+    <div class="instr-item"><i class="fas fa-thumbs-down"></i> Jempol bawah &rarr; Pause</div>
+  </div>
+</div>
+
+<script>
+/* ================================================================
+   DATA PLAYLIST - Menggunakan sample audio dari SoundHelix
+   ================================================================ */
+const playlist = [
+  { title:"Neon Genesis", artist:"Cyber Pulse", cover:"https://picsum.photos/seed/neon01/400/400", src:"https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" },
+  { title:"Digital Rain", artist:"Synth Wave", cover:"https://picsum.photos/seed/digi02/400/400", src:"https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3" },
+  { title:"Hologram Dreams", artist:"Neon Drift", cover:"https://picsum.photos/seed/holo03/400/400", src:"https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3" },
+  { title:"Chrome Horizon", artist:"Voltage", cover:"https://picsum.photos/seed/chrm04/400/400", src:"https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3" },
+  { title:"Midnight Protocol", artist:"Ghost Circuit", cover:"https://picsum.photos/seed/midn05/400/400", src:"https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3" },
+  { title:"Quantum Flux", artist:"Data Stream", cover:"https://picsum.photos/seed/quant06/400/400", src:"https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3" },
+  { title:"Electric Mirage", artist:"Pulse Code", cover:"https://picsum.photos/seed/elec07/400/400", src:"https://www.soundhelix.com/examples/mp3/SoundHelix-Song-7.mp3" },
+  { title:"Synthetica", artist:"Binary Star", cover:"https://picsum.photos/seed/synth08/400/400", src:"https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3" }
+];
+
+/* ================================================================
+   STATE MANAGEMENT
+   ================================================================ */
+const state = {
+  currentIndex: 0,
+  isPlaying: false,
+  currentTime: 0,
+  duration: 0,
+  howl: null,
+  handDetected: false,
+  handHistory: [],       // Buffer posisi pergelangan tangan
+  thumbHoldCount: 0,     // Hitungan frame untuk gestur jempol
+  lastGesture: null,
+  lastGestureTime: 0,
+  fps: 0,
+  frameCount: 0,
+  lastFpsTime: performance.now(),
+  cameraReady: false,
+  mediapipeReady: false,
+  instructionsOpen: false,
+  noHandTimer: 0         // Timer untuk menampilkan prompt tangan
+};
+
+/* ================================================================
+   KONSTANTA
+   ================================================================ */
+const SWIPE_BUFFER_SIZE = 12;
+const SWIPE_THRESHOLD = 0.28;   // Total perpindahan x yang diperlukan
+const SWIPE_COOLDOWN = 1500;     // ms
+const THUMB_HOLD_REQUIRED = 8;   // Frame berturut-turut
+const THUMB_COOLDOWN = 2000;
+const NO_HAND_SHOW_DELAY = 3000; // ms sebelum prompt tangan muncul
+
+// Koneksi landmark tangan (MediaPipe)
+const HAND_CONNECTIONS = [
+  [0,1],[1,2],[2,3],[3,4],
+  [0,5],[5,6],[6,7],[7,8],
+  [5,9],[9,10],[10,11],[11,12],
+  [9,13],[13,14],[14,15],[15,16],
+  [13,17],[17,18],[18,19],[19,20],
+  [0,17]
+];
+
+/* ================================================================
+   REFERENSI DOM
+   ================================================================ */
+const $ = id => document.getElementById(id);
+const dom = {
+  loadingScreen: $('loading-screen'),
+  loaderFill: $('loader-fill'),
+  loaderStatus: $('loader-status'),
+  arContainer: $('ar-container'),
+  fallbackBg: $('fallback-bg'),
+  webcam: $('webcam'),
+  canvas: $('hand-canvas'),
+  hudTime: $('hud-time'),
+  fpsCounter: $('fps-counter'),
+  hudTracking: $('hud-tracking'),
+  trackingText: $('tracking-text'),
+  gestureLog: $('gesture-log'),
+  musicCard: $('music-card'),
+  cardCoverImg: $('card-cover-img'),
+  cardTitle: $('card-title'),
+  cardArtist: $('card-artist'),
+  timeCurrent: $('time-current'),
+  timeTotal: $('time-total'),
+  progressFill: $('progress-fill'),
+  progressTrack: $('progress-track'),
+  visualizer: $('visualizer'),
+  btnPlay: $('btn-play'),
+  playIcon: $('play-icon'),
+  btnPrev: $('btn-prev'),
+  btnNext: $('btn-next'),
+  carouselTrack: $('carousel-track'),
+  gestureIndicator: $('gesture-indicator'),
+  gestureIcon: $('gesture-icon'),
+  gestureText: $('gesture-text'),
+  handPrompt: $('hand-prompt'),
+  btnInstructions: $('btn-instructions'),
+  instructions: $('instructions'),
+  flashLeft: $('flash-left'),
+  flashRight: $('flash-right'),
+  flashUp: $('flash-up'),
+  flashDown: $('flash-down')
+};
+const ctx = dom.canvas.getContext('2d');
+
+/* ================================================================
+   UTILITAS
+   ================================================================ */
+function formatTime(s) {
+  if (!isFinite(s) || s < 0) s = 0;
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return m + ':' + (sec < 10 ? '0' : '') + sec;
+}
+
+function updateLoader(pct, text) {
+  dom.loaderFill.style.width = pct + '%';
+  if (text) dom.loaderStatus.textContent = text;
+}
+
+/* ================================================================
+   INISIALISASI
+   ================================================================ */
+async function init() {
+  // Buat side ticks
+  ['side-left','side-right'].forEach(id => {
+    const el = $(id);
+    for (let i = 0; i < 25; i++) {
+      const tick = document.createElement('div');
+      tick.className = 'side-tick';
+      el.appendChild(tick);
+    }
+  });
+
+  // Buat visualizer bars
+  for (let i = 0; i < 28; i++) {
+    const bar = document.createElement('div');
+    bar.className = 'vis-bar';
+    bar.style.height = '3px';
+    bar.style.opacity = '0.25';
+    bar.dataset.idx = i;
+    dom.visualizer.appendChild(bar);
+  }
+
+  // Render carousel
+  renderCarousel();
+
+  // Muat lagu pertama
+  loadSong(0, false);
+
+  // Mulai kamera
+  try {
+    updateLoader(10, 'Mengakses kamera...');
+    await setupCamera();
+    updateLoader(40, 'Kamera aktif. Memuat AI...');
+  } catch(e) {
+    console.warn('Kamera tidak tersedia:', e.message);
+    updateLoader(40, 'Kamera tidak tersedia - mode fallback');
+    dom.fallbackBg.style.display = 'block';
+  }
+
+  // Mulai MediaPipe
+  try {
+    updateLoader(50, 'Memuat model deteksi tangan...');
+    await setupMediaPipe();
+    updateLoader(90, 'Hampir siap...');
+  } catch(e) {
+    console.warn('MediaPipe gagal:', e.message);
+    updateLoader(90, 'Gesture control tidak tersedia');
+  }
+
+  // Selesai
+  updateLoader(100, 'SISTEM ONLINE');
+  await new Promise(r => setTimeout(r, 600));
+
+  gsap.to(dom.loadingScreen, {
+    opacity: 0,
+    duration: 0.6,
+    ease: 'power2.inOut',
+    onComplete: () => {
+      dom.loadingScreen.style.display = 'none';
+      dom.arContainer.style.display = 'block';
+      gsap.from('#music-card', { scale: 0.8, opacity: 0, duration: 0.8, ease: 'back.out(1.4)' });
+      gsap.from('.carousel-card', { y: 40, opacity: 0, duration: 0.6, stagger: 0.06, delay: 0.3, ease: 'power2.out' });
+      gsap.from('.hud-corner', { scale: 0, opacity: 0, duration: 0.4, stagger: 0.1, delay: 0.5, ease: 'back.out(2)' });
+    }
+  });
+
+  // Loop utama
+  requestAnimationFrame(mainLoop);
+  setInterval(updateHUDTime, 1000);
+  updateHUDTime();
+}
+
+/* ================================================================
+   KAMERA (WebRTC)
+   ================================================================ */
+function setupCamera() {
+  return new Promise((resolve, reject) => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      reject(new Error('WebRTC tidak didukung'));
+      return;
+    }
+    navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false
+    }).then(stream => {
+      dom.webcam.srcObject = stream;
+      dom.webcam.onloadedmetadata = () => {
+        dom.canvas.width = dom.webcam.videoWidth;
+        dom.canvas.height = dom.webcam.videoHeight;
+        state.cameraReady = true;
+        resolve();
+      };
+    }).catch(reject);
+  });
+}
+
+/* ================================================================
+   MEDIAPIPE HANDS
+   ================================================================ */
+function setupMediaPipe() {
+  return new Promise((resolve, reject) => {
+    try {
+      const hands = new Hands({
+        locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+      });
+      hands.setOptions({
+        maxNumHands: 1,
+        modelComplexity: 1,
+        minDetectionConfidence: 0.65,
+        minTrackingConfidence: 0.5
+      });
+      hands.onResults(onHandResults);
+
+      // Gunakan Camera utils untuk loop frame
+      if (state.cameraReady) {
+        const cam = new Camera(dom.webcam, {
+          onFrame: async () => { await hands.send({ image: dom.webcam }); },
+          width: 1280,
+          height: 720
+        });
+        cam.start().then(() => {
+          state.mediapipeReady = true;
+          resolve();
+        }).catch(reject);
+      } else {
+        resolve(); // Tidak bisa dijalankan tanpa kamera
+      }
+    } catch(e) {
+      reject(e);
+    }
+  });
+}
+
+/* ================================================================
+   HASIL DETEKSI TANGAN
+   ================================================================ */
+function onHandResults(results) {
+  // Bersihkan canvas
+  ctx.clearRect(0, 0, dom.canvas.width, dom.canvas.height);
+
+  if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+    const landmarks = results.multiHandLandmarks[0];
+    state.handDetected = true;
+    state.noHandTimer = 0;
+
+    // Gambar kerangka tangan dengan efek neon
+    drawHandSkeleton(landmarks);
+
+    // Update posisi pergelangan tangan ke buffer
+    const wrist = landmarks[0];
+    state.handHistory.push({ x: wrist.x, y: wrist.y, time: performance.now() });
+    if (state.handHistory.length > SWIPE_BUFFER_SIZE) {
+      state.handHistory.shift();
+    }
+
+    // Deteksi gestur
+    detectGestures(landmarks);
+  } else {
+    state.handDetected = false;
+    state.handHistory = [];
+    state.thumbHoldCount = 0;
+  }
+}
+
+/* ================================================================
+   GAMBAR KERANGKA TANGAN (NEON HOLOGRAM)
+   ================================================================ */
+function drawHandSkeleton(landmarks) {
+  const w = dom.canvas.width;
+  const h = dom.canvas.height;
+
+  // Gambar koneksi (garis)
+  ctx.save();
+  ctx.shadowColor = '#00e5ff';
+  ctx.shadowBlur = 12;
+  ctx.strokeStyle = '#00e5ff';
+  ctx.lineWidth = 2.5;
+  ctx.lineCap = 'round';
+
+  HAND_CONNECTIONS.forEach(([a, b]) => {
+    const la = landmarks[a];
+    const lb = landmarks[b];
+    ctx.beginPath();
+    ctx.moveTo(la.x * w, la.y * h);
+    ctx.lineTo(lb.x * w, lb.y * h);
+    ctx.stroke();
+  });
+
+  // Gambar landmark (titik)
+  ctx.shadowBlur = 16;
+  ctx.shadowColor = '#00e5ff';
+  landmarks.forEach((lm, i) => {
+    const x = lm.x * w;
+    const y = lm.y * h;
+    const r = [0, 4, 8, 12, 16, 20].includes(i) ? 5 : 3; // Titik ujung lebih besar
+
+    ctx.beginPath();
+    ctx.arc(x, y, Math.max(1, r), 0, Math.PI * 2);
+    ctx.fillStyle = [4].includes(i) ? '#00ff88' : '#00e5ff'; // Ibu jari hijau
+    ctx.fill();
+
+    // Ring luar untuk titik ujung jari
+    if ([4, 8, 12, 16, 20].includes(i)) {
+      ctx.beginPath();
+      ctx.arc(x, y, Math.max(1, r + 4), 0, Math.PI * 2);
+      ctx.strokeStyle = [4].includes(i) ? 'rgba(0,255,136,0.4)' : 'rgba(0,229,255,0.4)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+  });
+
+  ctx.restore();
+}
+
+/* ================================================================
+   DETEKSI GESTUR
+   ================================================================ */
+function detectGestures(landmarks) {
+  const now = performance.now();
+
+  // --- Deteksi Swipe ---
+  if (state.handHistory.length >= SWIPE_BUFFER_SIZE) {
+    const oldest = state.handHistory[0];
+    const newest = state.handHistory[state.handHistory.length - 1];
+    const dx = newest.x - oldest.x; // Perpindahan x (koordinat asli, belum di-mirror)
+
+    // Karena video di-mirror: dx negatif = tangan bergerak ke kanan di layar = SWIPE RIGHT
+    if (Math.abs(dx) > SWIPE_THRESHOLD && (now - state.lastGestureTime) > SWIPE_COOLDOWN) {
+      const gesture = dx < 0 ? 'swipe_right' : 'swipe_left';
+      triggerGesture(gesture);
+      state.handHistory = []; // Reset buffer
+      return;
+    }
+  }
+
+  // --- Deteksi Jempol Atas/Bawah ---
+  const thumbTip = landmarks[4];
+  const thumbIP = landmarks[3];
+  const thumbMCP = landmarks[2];
+
+  // Periksa apakah 4 jari lain terlipat (tip di bawah PIP)
+  const fingerTips = [8, 12, 16, 20];
+  const fingerPIPs = [6, 10, 14, 18];
+  const allCurled = fingerTips.every((tipIdx, i) => {
+    return landmarks[tipIdx].y > landmarks[fingerPIPs[i]].y;
+  });
+
+  if (allCurled) {
+    // Jempol atas: ujung jempol lebih tinggi (y lebih kecil) dari MCP
+    if (thumbTip.y < thumbMCP.y - 0.06) {
+      state.thumbHoldCount++;
+      if (state.thumbHoldCount >= THUMB_HOLD_REQUIRED && (now - state.lastGestureTime) > THUMB_COOLDOWN) {
+        triggerGesture('thumbs_up');
+        state.thumbHoldCount = 0;
+        return;
+      }
+    }
+    // Jempol bawah: ujung jempol lebih rendah (y lebih besar) dari MCP
+    else if (thumbTip.y > thumbMCP.y + 0.06) {
+      state.thumbHoldCount++;
+      if (state.thumbHoldCount >= THUMB_HOLD_REQUIRED && (now - state.lastGestureTime) > THUMB_COOLDOWN) {
+        triggerGesture('thumbs_down');
+        state.thumbHoldCount = 0;
+        return;
+      }
+    } else {
+      state.thumbHoldCount = 0;
+    }
+  } else {
+    state.thumbHoldCount = 0;
+  }
+}
+
+function triggerGesture(gesture) {
+  state.lastGesture = gesture;
+  state.lastGestureTime = performance.now();
+  state.thumbHoldCount = 0;
+
+  // Log gestur
+  const labels = {
+    swipe_right: 'NEXT TRACK',
+    swipe_left: 'PREV TRACK',
+    thumbs_up: 'PLAY',
+    thumbs_down: 'PAUSE'
+  };
+  dom.gestureLog.textContent = labels[gesture] || gesture;
+
+  // Tampilkan indikator gestur
+  showGestureIndicator(gesture);
+
+  // Flash efek
+  flashGesture(gesture);
+
+  // Eksekusi aksi
+  switch(gesture) {
+    case 'swipe_right': nextSong(); break;
+    case 'swipe_left': prevSong(); break;
+    case 'thumbs_up': if (!state.isPlaying) playSong(); break;
+    case 'thumbs_down': if (state.isPlaying) pauseSong(); break;
+  }
+}
+
+/* ================================================================
+   INDIKATOR GESTUR VISUAL
+   ================================================================ */
+function showGestureIndicator(gesture) {
+  const icons = {
+    swipe_right: '<i class="fas fa-forward-step"></i>',
+    swipe_left: '<i class="fas fa-backward-step"></i>',
+    thumbs_up: '<i class="fas fa-thumbs-up"></i>',
+    thumbs_down: '<i class="fas fa-thumbs-down"></i>'
+  };
+  const texts = {
+    swipe_right: 'NEXT TRACK',
+    swipe_left: 'PREV TRACK',
+    thumbs_up: 'PLAY',
+    thumbs_down: 'PAUSE'
+  };
+
+  dom.gestureIcon.innerHTML = icons[gesture] || '';
+  dom.gestureText.textContent = texts[gesture] || '';
+
+  gsap.killTweensOf(dom.gestureIndicator);
+  gsap.fromTo(dom.gestureIndicator,
+    { opacity: 0, y: 20, scale: 0.8 },
+    { opacity: 1, y: 0, scale: 1, duration: 0.3, ease: 'back.out(2)',
+      onComplete: () => {
+        gsap.to(dom.gestureIndicator, { opacity: 0, y: -20, duration: 0.5, delay: 0.6, ease: 'power2.in' });
+      }
+    }
+  );
+}
+
+function flashGesture(gesture) {
+  const map = { swipe_left: 'flash-left', swipe_right: 'flash-right', thumbs_up: 'flash-up', thumbs_down: 'flash-down' };
+  const el = dom[map[gesture]];
+  if (!el) return;
+  gsap.killTweensOf(el);
+  gsap.fromTo(el, { opacity: 1 }, { opacity: 0, duration: 0.6, ease: 'power2.out' });
+}
+
+/* ================================================================
+   MUSIC PLAYER - Howler.js
+   ================================================================ */
+function loadSong(index, autoPlay = false) {
+  // Hentikan lagu sebelumnya
+  if (state.howl) {
+    state.howl.unload();
+    state.howl = null;
+  }
+
+  state.currentIndex = index;
+  state.currentTime = 0;
+  state.duration = 0;
+  const song = playlist[index];
+
+  // Update UI
+  dom.cardCoverImg.src = song.cover;
+  dom.cardTitle.textContent = song.title;
+  dom.cardArtist.textContent = song.artist;
+  dom.timeCurrent.textContent = '0:00';
+  dom.timeTotal.textContent = '0:00';
+  dom.progressFill.style.width = '0%';
+
+  // Highlight carousel
+  updateCarousel();
+
+  // Buat Howl baru
+  state.howl = new Howl({
+    src: [song.src],
+    html5: true, // Gunakan HTML5 Audio untuk streaming
+    format: ['mp3'],
+    onload: function() {
+      state.duration = state.howl.duration();
+      dom.timeTotal.textContent = formatTime(state.duration);
+    },
+    onloaderror: function(id, err) {
+      console.warn('Gagal memuat audio:', err);
+      // Simulasi durasi jika audio gagal dimuat
+      state.duration = 240;
+      dom.timeTotal.textContent = formatTime(state.duration);
+    },
+    onplay: function() {
+      state.isPlaying = true;
+      dom.playIcon.className = 'fas fa-pause';
+      dom.visualizer.classList.remove('paused');
+      dom.musicCard.classList.add('glow-active');
+    },
+    onpause: function() {
+      state.isPlaying = false;
+      dom.playIcon.className = 'fas fa-play';
+      dom.visualizer.classList.add('paused');
+      dom.musicCard.classList.remove('glow-active');
+    },
+    onstop: function() {
+      state.isPlaying = false;
+      dom.playIcon.className = 'fas fa-play';
+      dom.visualizer.classList.add('paused');
+      dom.musicCard.classList.remove('glow-active');
+    },
+    onend: function() {
+      // Otomatis lanjut ke lagu berikutnya
+      nextSong();
+    }
+  });
+
+  if (autoPlay) {
+    state.howl.play();
+  }
+}
+
+function playSong() {
+  if (!state.howl) return;
+  if (state.isPlaying) return;
+  state.howl.play();
+}
+
+function pauseSong() {
+  if (!state.howl) return;
+  if (!state.isPlaying) return;
+  state.howl.pause();
+}
+
+function togglePlay() {
+  if (state.isPlaying) pauseSong();
+  else playSong();
+}
+
+function nextSong() {
+  const next = (state.currentIndex + 1) % playlist.length;
+  // Animasi transisi
+  gsap.to(dom.musicCard, {
+    scale: 0.95, opacity: 0.5, duration: 0.15,
+    onComplete: () => {
+      loadSong(next, state.isPlaying);
+      gsap.to(dom.musicCard, { scale: 1, opacity: 1, duration: 0.4, ease: 'back.out(1.2)' });
+    }
+  });
+}
+
+function prevSong() {
+  // Jika sudah diputar > 3 detik, restart lagu. Jika tidak, ke lagu sebelumnya
+  if (state.currentTime > 3) {
+    if (state.howl) state.howl.seek(0);
+    state.currentTime = 0;
+    return;
+  }
+  const prev = (state.currentIndex - 1 + playlist.length) % playlist.length;
+  gsap.to(dom.musicCard, {
+    scale: 0.95, opacity: 0.5, duration: 0.15,
+    onComplete: () => {
+      loadSong(prev, state.isPlaying);
+      gsap.to(dom.musicCard, { scale: 1, opacity: 1, duration: 0.4, ease: 'back.out(1.2)' });
+    }
+  });
+}
+
+function seekTo(ratio) {
+  if (!state.howl || !isFinite(state.duration) || state.duration <= 0) return;
+  const seekTime = ratio * state.duration;
+  state.howl.seek(seekTime);
+  state.currentTime = seekTime;
+}
+
+/* ================================================================
+   CAROUSEL
+   ================================================================ */
+function renderCarousel() {
+  dom.carouselTrack.innerHTML = '';
+  playlist.forEach((song, i) => {
+    const card = document.createElement('div');
+    card.className = 'carousel-card' + (i === state.currentIndex ? ' active' : '');
+    card.innerHTML = `<img src="${song.cover}" alt="${song.title}" loading="lazy"><div class="card-label">${song.title}</div>`;
+    card.addEventListener('click', () => {
+      if (i === state.currentIndex) return;
+      gsap.to(dom.musicCard, {
+        scale: 0.95, opacity: 0.5, duration: 0.15,
+        onComplete: () => {
+          loadSong(i, state.isPlaying);
+          gsap.to(dom.musicCard, { scale: 1, opacity: 1, duration: 0.4, ease: 'back.out(1.2)' });
+        }
+      });
+    });
+    dom.carouselTrack.appendChild(card);
+  });
+  updateCarousel();
+}
+
+function updateCarousel() {
+  const cards = dom.carouselTrack.querySelectorAll('.carousel-card');
+  const isMobile = window.innerWidth < 640;
+  const spacing = isMobile ? 75 : 110;
+
+  cards.forEach((card, i) => {
+    const offset = i - state.currentIndex;
+    const absOffset = Math.abs(offset);
+
+    if (absOffset > 3) {
+      card.style.opacity = '0';
+      card.style.pointerEvents = 'none';
+      return;
+    }
+
+    card.style.pointerEvents = 'auto';
+    card.classList.toggle('active', i === state.currentIndex);
+
+    const x = offset * spacing;
+    const scale = 1 - absOffset * 0.22;
+    const opacity = 1 - absOffset * 0.3;
+    const blur = absOffset * 2;
+
+    gsap.to(card, {
+      x: x,
+      scale: Math.max(0.4, scale),
+      opacity: Math.max(0.1, opacity),
+      filter: `blur(${blur}px)`,
+      duration: 0.5,
+      ease: 'power2.out'
+    });
+  });
+}
+
+/* ================================================================
+   VISUALIZER ANIMASI
+   ================================================================ */
+function updateVisualizer() {
+  if (!state.isPlaying) return;
+  const bars = dom.visualizer.querySelectorAll('.vis-bar');
+  const time = performance.now() * 0.003;
+  bars.forEach((bar, i) => {
+    const h = 4 + Math.abs(Math.sin(time + i * 0.5)) * 22 + Math.random() * 6;
+    bar.style.height = h + 'px';
+    bar.style.opacity = (0.4 + (h / 32) * 0.6).toFixed(2);
+  });
+}
+
+/* ================================================================
+   PROGRESS BAR UPDATE
+   ================================================================ */
+function updateProgress() {
+  if (state.isPlaying && state.howl) {
+    state.currentTime = state.howl.seek() || 0;
+  }
+  if (state.duration > 0) {
+    const pct = (state.currentTime / state.duration) * 100;
+    dom.progressFill.style.width = pct + '%';
+    dom.timeCurrent.textContent = formatTime(state.currentTime);
+  }
+}
+
+/* ================================================================
+   HUD UPDATE
+   ================================================================ */
+function updateHUDTime() {
+  const now = new Date();
+  const h = String(now.getHours()).padStart(2, '0');
+  const m = String(now.getMinutes()).padStart(2, '0');
+  const s = String(now.getSeconds()).padStart(2, '0');
+  dom.hudTime.textContent = `${h}:${m}:${s}`;
+}
+
+function updateFPS() {
+  state.frameCount++;
+  const now = performance.now();
+  if (now - state.lastFpsTime >= 1000) {
+    state.fps = state.frameCount;
+    state.frameCount = 0;
+    state.lastFpsTime = now;
+    dom.fpsCounter.textContent = state.fps;
+  }
+}
+
+function updateTrackingStatus() {
+  if (state.handDetected) {
+    dom.hudTracking.classList.add('active');
+    dom.trackingText.textContent = 'HAND LOCKED';
+    dom.handPrompt.style.opacity = '0';
+  } else {
+    dom.hudTracking.classList.remove('active');
+    dom.trackingText.textContent = 'NO HAND';
+    state.noHandTimer += 16;
+    if (state.noHandTimer > NO_HAND_SHOW_DELAY && state.mediapipeReady) {
+      dom.handPrompt.style.opacity = '1';
+    } else {
+      dom.handPrompt.style.opacity = '0';
+    }
+  }
+}
+
+/* ================================================================
+   MAIN LOOP
+   ================================================================ */
+function mainLoop() {
+  updateFPS();
+  updateProgress();
+  updateVisualizer();
+  updateTrackingStatus();
+  requestAnimationFrame(mainLoop);
+}
+
+/* ================================================================
+   EVENT LISTENERS
+   ================================================================ */
+dom.btnPlay.addEventListener('click', togglePlay);
+dom.btnNext.addEventListener('click', nextSong);
+dom.btnPrev.addEventListener('click', prevSong);
+
+dom.progressTrack.addEventListener('click', e => {
+  const rect = dom.progressTrack.getBoundingClientRect();
+  const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+  seekTo(ratio);
+});
+
+dom.btnInstructions.addEventListener('click', () => {
+  state.instructionsOpen = !state.instructionsOpen;
+  if (state.instructionsOpen) {
+    dom.instructions.style.display = 'block';
+    gsap.fromTo(dom.instructions, { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.3 });
+  } else {
+    gsap.to(dom.instructions, {
+      opacity: 0, y: 10, duration: 0.2,
+      onComplete: () => { dom.instructions.style.display = 'none'; }
+    });
+  }
+});
+
+// Keyboard controls
+document.addEventListener('keydown', e => {
+  switch(e.code) {
+    case 'Space': e.preventDefault(); togglePlay(); break;
+    case 'ArrowRight': nextSong(); break;
+    case 'ArrowLeft': prevSong(); break;
+  }
+});
+
+// Resize handler untuk canvas dan carousel
+window.addEventListener('resize', () => {
+  if (state.cameraReady) {
+    dom.canvas.width = dom.webcam.videoWidth;
+    dom.canvas.height = dom.webcam.videoHeight;
+  }
+  updateCarousel();
+});
+
+// Touch/swipe pada carousel untuk mobile
+let touchStartX = 0;
+let touchStartY = 0;
+dom.carouselTrack.addEventListener('touchstart', e => {
+  touchStartX = e.touches[0].clientX;
+  touchStartY = e.touches[0].clientY;
+}, { passive: true });
+dom.carouselTrack.addEventListener('touchend', e => {
+  const dx = e.changedTouches[0].clientX - touchStartX;
+  const dy = e.changedTouches[0].clientY - touchStartY;
+  if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
+    if (dx < 0) nextSong();
+    else prevSong();
+  }
+}, { passive: true });
+
+/* ================================================================
+   MULAI APLIKASI
+   ================================================================ */
+init();
+</script>
+</body>
+</html>
