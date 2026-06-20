@@ -29,7 +29,7 @@ body{position:relative}
 #fallback-bg .fb-glow1{position:absolute;top:30%;left:40%;width:300px;height:300px;background:radial-gradient(circle,rgba(0,255,136,0.06),transparent 70%);border-radius:50%}
 #fallback-bg .fb-glow2{position:absolute;bottom:20%;right:30%;width:250px;height:250px;background:radial-gradient(circle,rgba(0,229,255,0.05),transparent 70%);border-radius:50%}
 
-#yt-container{position:fixed;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);pointer-events:none;z-index:-1}
+#yt-container{position:fixed;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);pointer-events:none;z-index:-1;opacity:0}
 
 #ar-container{position:fixed;inset:0;display:none}
 #webcam{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1);filter:brightness(0.65) contrast(1.15) saturate(0.75)}
@@ -80,7 +80,8 @@ body{position:relative}
 .cover-glow{position:absolute;bottom:-30px;left:50%;transform:translateX(-50%);width:180px;height:70px;background:var(--neon-green);filter:blur(50px);opacity:0;transition:opacity 0.8s;border-radius:50%}
 #music-card.glow-active .cover-glow{opacity:0.2}
 .card-loading{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-family:'Orbitron',monospace;font-size:10px;letter-spacing:3px;color:var(--neon-blue);opacity:0;pointer-events:none;z-index:5;transition:opacity 0.3s}
-.card-loading.show{opacity:1}
+.card-loading.show{opacity:1;animation:loadPulse 1.2s ease infinite}
+@keyframes loadPulse{0%,100%{opacity:0.5}50%{opacity:1}}
 .card-body{padding:0 18px 18px}
 .card-title{font-family:'Orbitron',monospace;font-size:clamp(13px,2.3vw,17px);font-weight:700;letter-spacing:1px;color:#fff;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .card-artist{font-size:13px;color:var(--neon-blue);letter-spacing:1px;margin-bottom:12px;font-weight:500}
@@ -130,6 +131,8 @@ body{position:relative}
 
 .yt-fail-notice{position:fixed;top:60px;left:50%;transform:translateX(-50%);z-index:25;font-family:'Orbitron',monospace;font-size:9px;letter-spacing:2px;color:var(--neon-pink);background:rgba(255,0,102,0.08);border:1px solid rgba(255,0,102,0.2);padding:6px 16px;border-radius:6px;pointer-events:none;opacity:0;white-space:nowrap}
 
+#track-num{position:absolute;top:10px;right:12px;font-family:'Orbitron',monospace;font-size:9px;letter-spacing:2px;color:rgba(0,255,136,0.35);z-index:3;pointer-events:none}
+
 @media(max-width:640px){
   #music-card{max-width:290px}
   .card-title{font-size:12px}
@@ -146,9 +149,7 @@ body{position:relative}
   #hand-prompt{bottom:100px;font-size:9px}
   .card-controls{gap:14px}
 }
-@media(prefers-reduced-motion:reduce){
-  *,*::before,*::after{animation-duration:0.01ms!important;transition-duration:0.01ms!important}
-}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:0.01ms!important;transition-duration:0.01ms!important}}
 </style>
 </head>
 <body>
@@ -171,10 +172,8 @@ body{position:relative}
   <div class="scan-line"></div>
   <div class="vignette"></div>
   <div class="grid-overlay"></div>
-  <div class="hud-corner tl"></div>
-  <div class="hud-corner tr"></div>
-  <div class="hud-corner bl"></div>
-  <div class="hud-corner br"></div>
+  <div class="hud-corner tl"></div><div class="hud-corner tr"></div>
+  <div class="hud-corner bl"></div><div class="hud-corner br"></div>
   <div class="hud-top">
     <div class="hud-status"><span class="status-dot"></span>AR MUSIC SYSTEM</div>
     <div class="hud-time" id="hud-time"></div>
@@ -194,6 +193,7 @@ body{position:relative}
 
   <div id="music-player">
     <div id="music-card">
+      <div id="track-num">01 / 08</div>
       <div class="card-cover">
         <img id="card-cover-img" src="" alt="Album Cover">
         <div class="cover-overlay"></div>
@@ -243,7 +243,7 @@ body{position:relative}
 
 <script>
 /* ==========================================================
-   LOAD YOUTUBE IFRAME API (async, sesuai docs resmi YT)
+   LOAD YOUTUBE IFRAME API
    ========================================================== */
 var ytAPITag = document.createElement('script');
 ytAPITag.src = 'https://www.youtube.com/iframe_api';
@@ -256,64 +256,51 @@ function onYouTubeIframeAPIReady() {
   ytAPIReady = true;
   if (ytReadyResolve) ytReadyResolve();
 }
+
 function waitForYT() {
   return new Promise(function(resolve) {
     if (ytAPIReady) { resolve(); return; }
     ytReadyResolve = resolve;
-    // Fallback timeout 8 detik
     setTimeout(function() { resolve(); }, 8000);
   });
 }
 
 /* ==========================================================
-   DATA PLAYLIST - YouTube video IDs
+   PLAYLIST - Video ID sudah diperbaiki (termasuk #8)
    ========================================================== */
 var playlist = [
-  { title:"Neon Genesis",       artist:"Cyber Pulse",    cover:"https://picsum.photos/seed/neon01/400/400", videoId:"lY5V4hSLWY8" },
-  { title:"Digital Rain",       artist:"Synth Wave",     cover:"https://picsum.photos/seed/digi02/400/400", videoId:"kPa7bsKwL-c" },
-  { title:"Hologram Dreams",    artist:"Neon Drift",     cover:"https://picsum.photos/seed/holo03/400/400", videoId:"ko70cExuzZM" },
-  { title:"Chrome Horizon",     artist:"Voltage",        cover:"https://picsum.photos/seed/chrm04/400/400", videoId:"RZGcI9Arieg" },
-  { title:"Midnight Protocol",  artist:"Ghost Circuit",  cover:"https://picsum.photos/seed/midn05/400/400", videoId:"XxHkGZMX5zQ" },
-  { title:"Quantum Flux",       artist:"Data Stream",    cover:"https://picsum.photos/seed/quant06/400/400", videoId:"7tMkHH31UIE" },
-  { title:"Electric Mirage",    artist:"Pulse Code",     cover:"https://picsum.photos/seed/elec07/400/400", videoId:"bWuHp0YXjKk" },
-  { title:"Synthetica",         artist:"Binary Star",    cover:"https://picsum.photos/seed/synth08/400/400", videoId:"-fTqGhEGm4" }
+  { title:"Neon Genesis",      artist:"Cyber Pulse",   cover:"https://picsum.photos/seed/neon01/400/400", videoId:"lY5V4hSLWY8"  },
+  { title:"Digital Rain",      artist:"Synth Wave",    cover:"https://picsum.photos/seed/digi02/400/400", videoId:"kPa7bsKwL-c"  },
+  { title:"Hologram Dreams",   artist:"Neon Drift",    cover:"https://picsum.photos/seed/holo03/400/400", videoId:"ko70cExuzZM"  },
+  { title:"Chrome Horizon",    artist:"Voltage",       cover:"https://picsum.photos/seed/chrm04/400/400", videoId:"RZGcI9Arieg"  },
+  { title:"Midnight Protocol", artist:"Ghost Circuit", cover:"https://picsum.photos/seed/midn05/400/400", videoId:"XxHkGZMX5zQ"  },
+  { title:"Quantum Flux",      artist:"Data Stream",   cover:"https://picsum.photos/seed/quant06/400/400", videoId:"7tMkHH31UIE"  },
+  { title:"Electric Mirage",   artist:"Pulse Code",    cover:"https://picsum.photos/seed/elec07/400/400", videoId:"bWuHp0YXjKk"  },
+  { title:"Synthetica",        artist:"Binary Star",   cover:"https://picsum.photos/seed/synth08/400/400", videoId:"-fTqG6hEGm4"  }
 ];
 
 /* ==========================================================
    STATE
    ========================================================== */
 var state = {
-  currentIndex: 0,
-  isPlaying: false,
-  currentTime: 0,
-  duration: 0,
-  handDetected: false,
-  handHistory: [],
-  thumbHoldCount: 0,
-  lastGestureTime: 0,
-  fps: 0,
-  frameCount: 0,
-  lastFpsTime: performance.now(),
-  cameraReady: false,
-  mediapipeReady: false,
-  ytPlayerReady: false,
-  ytFailed: false,
-  instructionsOpen: false,
-  noHandTimer: 0,
-  isTransitioning: false
+  currentIndex: 0, isPlaying: false, currentTime: 0, duration: 0,
+  handDetected: false, handHistory: [], thumbHoldCount: 0,
+  lastGestureTime: 0, fps: 0, frameCount: 0,
+  lastFpsTime: performance.now(), cameraReady: false,
+  mediapipeReady: false, ytPlayerReady: false, ytFailed: false,
+  instructionsOpen: false, noHandTimer: 0, isTransitioning: false
 };
 
 /* ==========================================================
    KONSTANTA GESTUR
    ========================================================== */
-var SWIPE_TIME_WINDOW = 500;   // ms jendela waktu untuk deteksi swipe
-var SWIPE_MIN_DX = 0.16;      // perpindahan minimum (normalisasi)
-var SWIPE_COOLDOWN = 1300;     // ms
-var THUMB_HOLD_REQ = 7;        // frame berturut-turut
-var THUMB_COOLDOWN = 2000;     // ms
-var NO_HAND_DELAY = 3500;      // ms
+var SWIPE_TIME_WINDOW = 500;
+var SWIPE_MIN_DX = 0.14;
+var SWIPE_COOLDOWN = 1300;
+var THUMB_HOLD_REQ = 7;
+var THUMB_COOLDOWN = 2000;
+var NO_HAND_DELAY = 3500;
 
-// Koneksi skeleton tangan MediaPipe
 var HAND_CONNS = [
   [0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],
   [5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],
@@ -325,22 +312,22 @@ var HAND_CONNS = [
    ========================================================== */
 function $(id) { return document.getElementById(id); }
 var dom = {
-  loadingScreen: $('loading-screen'), loaderFill: $('loader-fill'), loaderStatus: $('loader-status'),
-  arContainer: $('ar-container'), fallbackBg: $('fallback-bg'),
-  webcam: $('webcam'), canvas: $('hand-canvas'),
-  hudTime: $('hud-time'), fpsCounter: $('fps-counter'),
-  hudTracking: $('hud-tracking'), trackingText: $('tracking-text'), gestureLog: $('gesture-log'),
-  musicCard: $('music-card'), cardCoverImg: $('card-cover-img'),
-  cardTitle: $('card-title'), cardArtist: $('card-artist'),
-  timeCurrent: $('time-current'), timeTotal: $('time-total'),
-  progressFill: $('progress-fill'), progressTrack: $('progress-track'),
-  visualizer: $('visualizer'), btnPlay: $('btn-play'), playIcon: $('play-icon'),
-  btnPrev: $('btn-prev'), btnNext: $('btn-next'),
-  carouselTrack: $('carousel-track'), carouselContainer: $('carousel-container'),
-  gestureIndicator: $('gesture-indicator'), gestureIcon: $('gesture-icon'), gestureText: $('gesture-text'),
-  handPrompt: $('hand-prompt'), btnInstructions: $('btn-instructions'), instructions: $('instructions'),
-  flashLeft: $('flash-left'), flashRight: $('flash-right'), flashUp: $('flash-up'), flashDown: $('flash-down'),
-  cardLoading: $('card-loading'), ytFailNotice: $('yt-fail-notice')
+  loadingScreen:$('loading-screen'), loaderFill:$('loader-fill'), loaderStatus:$('loader-status'),
+  arContainer:$('ar-container'), fallbackBg:$('fallback-bg'),
+  webcam:$('webcam'), canvas:$('hand-canvas'),
+  hudTime:$('hud-time'), fpsCounter:$('fps-counter'),
+  hudTracking:$('hud-tracking'), trackingText:$('tracking-text'), gestureLog:$('gesture-log'),
+  musicCard:$('music-card'), cardCoverImg:$('card-cover-img'),
+  cardTitle:$('card-title'), cardArtist:$('card-artist'),
+  timeCurrent:$('time-current'), timeTotal:$('time-total'),
+  progressFill:$('progress-fill'), progressTrack:$('progress-track'),
+  visualizer:$('visualizer'), btnPlay:$('btn-play'), playIcon:$('play-icon'),
+  btnPrev:$('btn-prev'), btnNext:$('btn-next'),
+  carouselTrack:$('carousel-track'), carouselContainer:$('carousel-container'),
+  gestureIndicator:$('gesture-indicator'), gestureIcon:$('gesture-icon'), gestureText:$('gesture-text'),
+  handPrompt:$('hand-prompt'), btnInstructions:$('btn-instructions'), instructions:$('instructions'),
+  flashLeft:$('flash-left'), flashRight:$('flash-right'), flashUp:$('flash-up'), flashDown:$('flash-down'),
+  cardLoading:$('card-loading'), ytFailNotice:$('yt-fail-notice'), trackNum:$('track-num')
 };
 var ctx = dom.canvas.getContext('2d');
 var ytPlayer = null;
@@ -350,9 +337,7 @@ var ytPlayer = null;
    ========================================================== */
 function formatTime(s) {
   if (!isFinite(s) || s < 0) s = 0;
-  var m = Math.floor(s / 60);
-  var sec = Math.floor(s % 60);
-  return m + ':' + (sec < 10 ? '0' : '') + sec;
+  return Math.floor(s/60) + ':' + String(Math.floor(s%60)).padStart(2,'0');
 }
 function updateLoader(pct, text) {
   dom.loaderFill.style.width = pct + '%';
@@ -360,10 +345,10 @@ function updateLoader(pct, text) {
 }
 
 /* ==========================================================
-   INISIALISASI UTAMA
+   INISIALISASI
    ========================================================== */
 async function init() {
-  // Buat side ticks
+  // Side ticks
   ['side-left','side-right'].forEach(function(id) {
     var el = $(id);
     for (var i = 0; i < 22; i++) {
@@ -373,17 +358,14 @@ async function init() {
     }
   });
 
-  // Buat visualizer bars
+  // Visualizer bars
   for (var i = 0; i < 26; i++) {
     var bar = document.createElement('div');
     bar.className = 'vis-bar';
     dom.visualizer.appendChild(bar);
   }
 
-  // Render carousel
   renderCarousel();
-
-  // Tampilkan info lagu pertama
   updateSongUI(0);
 
   // 1) Kamera
@@ -408,12 +390,12 @@ async function init() {
       throw new Error('YouTube API timeout');
     }
   } catch(e) {
-    console.warn('YouTube Player:', e.message);
+    console.warn('YouTube:', e.message);
     state.ytFailed = true;
     updateLoader(65, 'YouTube tidak tersedia - mode UI saja');
   }
 
-  // 3) MediaPipe Hands
+  // 3) MediaPipe
   try {
     updateLoader(70, 'Memuat model deteksi tangan...');
     await setupMediaPipe();
@@ -423,11 +405,9 @@ async function init() {
     updateLoader(95, 'Gesture control tidak tersedia');
   }
 
-  // Selesai loading
   updateLoader(100, 'SISTEM ONLINE');
   await new Promise(function(r) { setTimeout(r, 500); });
 
-  // Transisi ke AR view
   gsap.to(dom.loadingScreen, {
     opacity: 0, duration: 0.5, ease: 'power2.inOut',
     onComplete: function() {
@@ -445,12 +425,9 @@ async function init() {
     }
   });
 
-  // Mulai loop
   requestAnimationFrame(mainLoop);
   setInterval(updateHUDTime, 1000);
   updateHUDTime();
-
-  // Interval update progress dari YouTube (tidak setiap frame, hemat performa)
   setInterval(syncYTProgress, 250);
 }
 
@@ -459,83 +436,62 @@ async function init() {
    ========================================================== */
 function createYTPlayer() {
   return new Promise(function(resolve, reject) {
-    var timeout = setTimeout(function() {
-      reject(new Error('Player creation timeout'));
-    }, 10000);
-
+    var timeout = setTimeout(function() { reject(new Error('Player creation timeout')); }, 10000);
     try {
       ytPlayer = new YT.Player('yt-player', {
-        height: '1',
-        width: '1',
+        height: '1', width: '1',
         videoId: playlist[0].videoId,
         playerVars: {
-          autoplay: 0,
-          controls: 0,
-          disablekb: 1,
-          fs: 0,
-          modestbranding: 1,
-          rel: 0,
-          showinfo: 0,
-          playsinline: 1,
-          origin: window.location.origin || window.location.protocol + '//' + window.location.host
+          autoplay: 0, controls: 0, disablekb: 1, fs: 0,
+          modestbranding: 1, rel: 0, showinfo: 0, playsinline: 1,
+          origin: window.location.origin || (window.location.protocol + '//' + window.location.host)
         },
         events: {
-          onReady: function(e) {
+          onReady: function() {
             clearTimeout(timeout);
             state.ytPlayerReady = true;
             try {
               state.duration = ytPlayer.getDuration() || 0;
               dom.timeTotal.textContent = formatTime(state.duration);
-            } catch(err) {}
+            } catch(e) {}
             resolve();
           },
-          onStateChange: function(e) {
-            onYTStateChange(e.data);
-          },
+          onStateChange: function(e) { onYTStateChange(e.data); },
           onError: function(e) {
-            console.warn('YT Player error:', e.data);
+            console.warn('YT error code:', e.data);
             clearTimeout(timeout);
-            // Jangan reject, masih bisa coba lagu lain
             resolve();
           }
         }
       });
-    } catch(e) {
-      clearTimeout(timeout);
-      reject(e);
-    }
+    } catch(e) { clearTimeout(timeout); reject(e); }
   });
 }
 
-function onYTStateChange(playerState) {
-  switch(playerState) {
-    case 1: // PLAYING
-      state.isPlaying = true;
-      dom.playIcon.className = 'fas fa-pause';
-      dom.visualizer.classList.add('active');
-      dom.musicCard.classList.add('glow-active');
-      dom.cardLoading.classList.remove('show');
-      try {
-        var d = ytPlayer.getDuration();
-        if (d > 0) { state.duration = d; dom.timeTotal.textContent = formatTime(d); }
-      } catch(e) {}
-      break;
-    case 2: // PAUSED
-      state.isPlaying = false;
-      dom.playIcon.className = 'fas fa-play';
-      dom.visualizer.classList.remove('active');
-      dom.musicCard.classList.remove('glow-active');
-      break;
-    case 0: // ENDED
-      state.isPlaying = false;
-      dom.playIcon.className = 'fas fa-play';
-      dom.visualizer.classList.remove('active');
-      dom.musicCard.classList.remove('glow-active');
-      nextSong();
-      break;
-    case 3: // BUFFERING
-      dom.cardLoading.classList.add('show');
-      break;
+function onYTStateChange(ps) {
+  if (ps === 1) { // PLAYING
+    state.isPlaying = true;
+    dom.playIcon.className = 'fas fa-pause';
+    dom.visualizer.classList.add('active');
+    dom.musicCard.classList.add('glow-active');
+    dom.cardLoading.classList.remove('show');
+    try {
+      var d = ytPlayer.getDuration();
+      if (d > 0) { state.duration = d; dom.timeTotal.textContent = formatTime(d); }
+    } catch(e) {}
+  } else if (ps === 2) { // PAUSED
+    state.isPlaying = false;
+    dom.playIcon.className = 'fas fa-play';
+    dom.visualizer.classList.remove('active');
+    dom.musicCard.classList.remove('glow-active');
+  } else if (ps === 0) { // ENDED
+    state.isPlaying = false;
+    dom.playIcon.className = 'fas fa-play';
+    dom.visualizer.classList.remove('active');
+    dom.musicCard.classList.remove('glow-active');
+    nextSong();
+  } else if (ps === 3) { // BUFFERING
+    dom.cardLoading.classList.add('show');
   }
 }
 
@@ -544,7 +500,7 @@ function syncYTProgress() {
   try {
     state.currentTime = ytPlayer.getCurrentTime() || 0;
     var d = ytPlayer.getDuration();
-    if (d > 0 && isFinite(d)) { state.duration = d; }
+    if (d > 0 && isFinite(d)) state.duration = d;
   } catch(e) {}
 }
 
@@ -557,12 +513,10 @@ function setupCamera() {
       reject(new Error('WebRTC tidak didukung'));
       return;
     }
-    // Cek akses kamera saja, Camera utilitas MediaPipe yang akan mengelola stream
     navigator.mediaDevices.getUserMedia({
       video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
       audio: false
     }).then(function(stream) {
-      // Stop stream percobaan, Camera utilitas akan membuat sendiri
       stream.getTracks().forEach(function(t) { t.stop(); });
       state.cameraReady = true;
       resolve();
@@ -578,20 +532,17 @@ function setupMediaPipe() {
     if (!state.cameraReady) { resolve(); return; }
     try {
       var hands = new Hands({
-        locateFile: function(file) { return 'https://cdn.jsdelivr.net/npm/@mediapipe/hands/' + file; }
+        locateFile: function(f) { return 'https://cdn.jsdelivr.net/npm/@mediapipe/hands/' + f; }
       });
       hands.setOptions({
-        maxNumHands: 1,
-        modelComplexity: 1,
-        minDetectionConfidence: 0.6,
-        minTrackingConfidence: 0.5
+        maxNumHands: 1, modelComplexity: 1,
+        minDetectionConfidence: 0.6, minTrackingConfidence: 0.5
       });
       hands.onResults(onHandResults);
 
       var cam = new Camera(dom.webcam, {
         onFrame: function() { return hands.send({ image: dom.webcam }); },
-        width: 1280,
-        height: 720
+        width: 1280, height: 720
       });
       cam.start().then(function() {
         dom.canvas.width = dom.webcam.videoWidth || 1280;
@@ -599,33 +550,24 @@ function setupMediaPipe() {
         state.mediapipeReady = true;
         resolve();
       }).catch(reject);
-    } catch(e) {
-      reject(e);
-    }
+    } catch(e) { reject(e); }
   });
 }
 
 /* ==========================================================
-   HASIL DETEKSI TANGAN
+   DETEKSI TANGAN
    ========================================================== */
 function onHandResults(results) {
   ctx.clearRect(0, 0, dom.canvas.width, dom.canvas.height);
-
   if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
     var lm = results.multiHandLandmarks[0];
     state.handDetected = true;
     state.noHandTimer = 0;
-
     drawHandSkeleton(lm);
-
-    // Buffer posisi wrist
     var wrist = lm[0];
     state.handHistory.push({ x: wrist.x, y: wrist.y, time: performance.now() });
-
-    // Bersihkan entry lama (>500ms)
     var now = performance.now();
     state.handHistory = state.handHistory.filter(function(p) { return now - p.time < SWIPE_TIME_WINDOW; });
-
     detectGestures(lm);
   } else {
     state.handDetected = false;
@@ -635,14 +577,11 @@ function onHandResults(results) {
 }
 
 /* ==========================================================
-   GAMBAR KERANGKA TANGAN (NEON HOLOGRAM)
+   GAMBAR SKELETON TANGAN
    ========================================================== */
 function drawHandSkeleton(lm) {
-  var w = dom.canvas.width;
-  var h = dom.canvas.height;
+  var w = dom.canvas.width, h = dom.canvas.height;
   ctx.save();
-
-  // Garis koneksi
   ctx.shadowColor = '#00e5ff';
   ctx.shadowBlur = 14;
   ctx.strokeStyle = '#00e5ff';
@@ -650,25 +589,21 @@ function drawHandSkeleton(lm) {
   ctx.lineCap = 'round';
 
   for (var i = 0; i < HAND_CONNS.length; i++) {
-    var a = HAND_CONNS[i][0];
-    var b = HAND_CONNS[i][1];
+    var a = HAND_CONNS[i][0], b = HAND_CONNS[i][1];
     ctx.beginPath();
     ctx.moveTo(lm[a].x * w, lm[a].y * h);
     ctx.lineTo(lm[b].x * w, lm[b].y * h);
     ctx.stroke();
   }
 
-  // Landmark (titik)
   var tips = [4, 8, 12, 16, 20];
   ctx.shadowBlur = 18;
   for (var j = 0; j < lm.length; j++) {
-    var x = lm[j].x * w;
-    var y = lm[j].y * h;
+    var x = lm[j].x * w, y = lm[j].y * h;
     var isTip = tips.indexOf(j) !== -1;
     var isThumb = j === 4;
     var r = isTip ? 5 : 3;
 
-    // Lingkaran luar untuk ujung jari
     if (isTip) {
       ctx.beginPath();
       ctx.arc(x, y, Math.max(1, r + 5), 0, Math.PI * 2);
@@ -679,15 +614,12 @@ function drawHandSkeleton(lm) {
       ctx.stroke();
       ctx.shadowBlur = 18;
     }
-
-    // Titik utama
     ctx.beginPath();
     ctx.arc(x, y, Math.max(1, r), 0, Math.PI * 2);
     ctx.fillStyle = isThumb ? '#00ff88' : '#00e5ff';
     ctx.shadowColor = isThumb ? '#00ff88' : '#00e5ff';
     ctx.fill();
   }
-
   ctx.restore();
 }
 
@@ -697,51 +629,37 @@ function drawHandSkeleton(lm) {
 function detectGestures(lm) {
   var now = performance.now();
 
-  // === SWIPE DETECTION (time-based) ===
+  // Swipe
   if (state.handHistory.length >= 5) {
     var oldest = state.handHistory[0];
     var newest = state.handHistory[state.handHistory.length - 1];
     var dt = (newest.time - oldest.time) / 1000;
     var dx = newest.x - oldest.x;
-
     if (dt > 0.1 && Math.abs(dx) > SWIPE_MIN_DX && (now - state.lastGestureTime) > SWIPE_COOLDOWN) {
-      // Koordinat belum di-mirror: dx negatif = tangan gerak kiri di raw = kanan di layar
-      var gesture = dx < 0 ? 'swipe_right' : 'swipe_left';
-      triggerGesture(gesture);
+      triggerGesture(dx < 0 ? 'swipe_right' : 'swipe_left');
       state.handHistory = [];
       return;
     }
   }
 
-  // === THUMBS UP / DOWN DETECTION ===
-  var thumbTip = lm[4];
-  var thumbMCP = lm[2];
-
-  // Cek 4 jari lain terlipat: tip y > PIP y (di bawah)
-  var fingerTips = [8, 12, 16, 20];
-  var fingerPIPs = [6, 10, 14, 18];
+  // Thumbs up/down
+  var thumbTip = lm[4], thumbMCP = lm[2];
+  var fingerTips = [8, 12, 16, 20], fingerPIPs = [6, 10, 14, 18];
   var allCurled = true;
   for (var i = 0; i < fingerTips.length; i++) {
-    if (lm[fingerTips[i]].y <= lm[fingerPIPs[i]].y) {
-      allCurled = false;
-      break;
-    }
+    if (lm[fingerTips[i]].y <= lm[fingerPIPs[i]].y) { allCurled = false; break; }
   }
 
   if (allCurled) {
     if (thumbTip.y < thumbMCP.y - 0.05) {
       state.thumbHoldCount++;
       if (state.thumbHoldCount >= THUMB_HOLD_REQ && (now - state.lastGestureTime) > THUMB_COOLDOWN) {
-        triggerGesture('thumbs_up');
-        state.thumbHoldCount = 0;
-        return;
+        triggerGesture('thumbs_up'); state.thumbHoldCount = 0; return;
       }
     } else if (thumbTip.y > thumbMCP.y + 0.05) {
       state.thumbHoldCount++;
       if (state.thumbHoldCount >= THUMB_HOLD_REQ && (now - state.lastGestureTime) > THUMB_COOLDOWN) {
-        triggerGesture('thumbs_down');
-        state.thumbHoldCount = 0;
-        return;
+        triggerGesture('thumbs_down'); state.thumbHoldCount = 0; return;
       }
     } else {
       state.thumbHoldCount = Math.max(0, state.thumbHoldCount - 1);
@@ -757,32 +675,23 @@ function detectGestures(lm) {
 function triggerGesture(gesture) {
   state.lastGestureTime = performance.now();
   state.thumbHoldCount = 0;
-
   var labels = { swipe_right:'NEXT TRACK', swipe_left:'PREV TRACK', thumbs_up:'PLAY', thumbs_down:'PAUSE' };
   dom.gestureLog.textContent = labels[gesture] || gesture;
-
   showGestureIndicator(gesture);
   flashGesture(gesture);
-
   switch(gesture) {
     case 'swipe_right': nextSong(); break;
     case 'swipe_left':  prevSong(); break;
     case 'thumbs_up':   if (!state.isPlaying) playSong(); break;
-    case 'thumbs_down':  if (state.isPlaying) pauseSong(); break;
+    case 'thumbs_down': if (state.isPlaying) pauseSong(); break;
   }
 }
 
 function showGestureIndicator(gesture) {
-  var icons = {
-    swipe_right:'<i class="fas fa-forward-step"></i>',
-    swipe_left:'<i class="fas fa-backward-step"></i>',
-    thumbs_up:'<i class="fas fa-thumbs-up"></i>',
-    thumbs_down:'<i class="fas fa-thumbs-down"></i>'
-  };
+  var icons = { swipe_right:'<i class="fas fa-forward-step"></i>', swipe_left:'<i class="fas fa-backward-step"></i>', thumbs_up:'<i class="fas fa-thumbs-up"></i>', thumbs_down:'<i class="fas fa-thumbs-down"></i>' };
   var texts = { swipe_right:'NEXT TRACK', swipe_left:'PREV TRACK', thumbs_up:'PLAY', thumbs_down:'PAUSE' };
   dom.gestureIcon.innerHTML = icons[gesture] || '';
   dom.gestureText.textContent = texts[gesture] || '';
-
   gsap.killTweensOf(dom.gestureIndicator);
   gsap.fromTo(dom.gestureIndicator,
     { opacity: 0, y: 15, scale: 0.85 },
@@ -803,13 +712,14 @@ function flashGesture(gesture) {
 }
 
 /* ==========================================================
-   KONTROL MUSIK (YouTube API)
+   KONTROL MUSIK
    ========================================================== */
 function updateSongUI(index) {
   var song = playlist[index];
   dom.cardCoverImg.src = song.cover;
   dom.cardTitle.textContent = song.title;
   dom.cardArtist.textContent = song.artist;
+  dom.trackNum.textContent = String(index + 1).padStart(2, '0') + ' / ' + String(playlist.length).padStart(2, '0');
   dom.timeCurrent.textContent = '0:00';
   dom.progressFill.style.width = '0%';
   state.currentTime = 0;
@@ -822,11 +732,9 @@ function loadSong(index, autoPlay) {
   state.duration = 0;
   dom.timeTotal.textContent = '0:00';
   dom.cardLoading.classList.add('show');
-
   updateSongUI(index);
 
   if (!ytPlayer || !state.ytPlayerReady || state.ytFailed) {
-    // Mode tanpa audio - tetap update UI
     dom.cardLoading.classList.remove('show');
     return;
   }
@@ -836,6 +744,12 @@ function loadSong(index, autoPlay) {
       ytPlayer.loadVideoById({ videoId: playlist[index].videoId });
     } else {
       ytPlayer.cueVideoById({ videoId: playlist[index].videoId });
+      // Jika sedang playing, mainkan setelah cue
+      if (autoPlay) {
+        setTimeout(function() {
+          try { ytPlayer.playVideo(); } catch(e) {}
+        }, 300);
+      }
     }
   } catch(e) {
     console.warn('Gagal load video:', e);
@@ -857,8 +771,7 @@ function pauseSong() {
 }
 
 function togglePlay() {
-  if (state.isPlaying) pauseSong();
-  else playSong();
+  if (state.isPlaying) pauseSong(); else playSong();
 }
 
 function switchSong(direction) {
@@ -866,32 +779,26 @@ function switchSong(direction) {
   state.isTransitioning = true;
 
   var newIndex;
-  if (direction === 'next') {
-    newIndex = (state.currentIndex + 1) % playlist.length;
-  } else {
-    // Jika sudah diputar > 3 detik, restart lagu
-    if (direction === 'prev' && state.currentTime > 3) {
-      if (ytPlayer && state.ytPlayerReady && !state.ytFailed) {
-        try { ytPlayer.seekTo(0, true); } catch(e) {}
-      }
-      state.currentTime = 0;
-      state.isTransitioning = false;
-      return;
+  if (direction === 'prev' && state.currentTime > 3) {
+    if (ytPlayer && state.ytPlayerReady && !state.ytFailed) {
+      try { ytPlayer.seekTo(0, true); } catch(e) {}
     }
-    newIndex = (state.currentIndex - 1 + playlist.length) % playlist.length;
+    state.currentTime = 0;
+    state.isTransitioning = false;
+    return;
   }
+
+  newIndex = direction === 'next'
+    ? (state.currentIndex + 1) % playlist.length
+    : (state.currentIndex - 1 + playlist.length) % playlist.length;
 
   var wasPlaying = state.isPlaying;
 
-  // Animasi keluar
   gsap.to(dom.musicCard, {
     scale: 0.92, opacity: 0.4, y: direction === 'next' ? -10 : 10,
     duration: 0.15, ease: 'power2.in',
     onComplete: function() {
-      // Ganti lagu
       loadSong(newIndex, wasPlaying);
-
-      // Animasi masuk dari arah berlawanan
       gsap.fromTo(dom.musicCard,
         { scale: 0.92, opacity: 0.4, y: direction === 'next' ? 10 : -10 },
         { scale: 1, opacity: 1, y: 0, duration: 0.4, ease: 'back.out(1.2)',
@@ -915,7 +822,7 @@ function seekTo(ratio) {
 }
 
 /* ==========================================================
-   CAROUSEL (diperbaiki total)
+   CAROUSEL
    ========================================================== */
 function renderCarousel() {
   dom.carouselTrack.innerHTML = '';
@@ -923,14 +830,11 @@ function renderCarousel() {
     (function(idx) {
       var card = document.createElement('div');
       card.className = 'carousel-card';
-      card.innerHTML = '<img src="' + playlist[idx].cover + '" alt="' + playlist[idx].title + '" loading="lazy">' +
-                       '<div class="card-label">' + playlist[idx].title + '</div>';
+      card.innerHTML = '<img src="' + playlist[idx].cover + '" alt="' + playlist[idx].title + '" loading="lazy"><div class="card-label">' + playlist[idx].title + '</div>';
       card.addEventListener('click', function() {
         if (idx === state.currentIndex || state.isTransitioning) return;
-        var dir = idx > state.currentIndex ? 'next' : 'prev';
         state.isTransitioning = true;
         var wasPlaying = state.isPlaying;
-
         gsap.to(dom.musicCard, {
           scale: 0.92, opacity: 0.4, duration: 0.15,
           onComplete: function() {
@@ -945,7 +849,6 @@ function renderCarousel() {
       dom.carouselTrack.appendChild(card);
     })(i);
   }
-  // Set posisi awal setelah render
   requestAnimationFrame(function() { updateCarousel(true); });
 }
 
@@ -961,12 +864,10 @@ function updateCarousel(instant) {
     var offset = i - state.currentIndex;
     var absOff = Math.abs(offset);
 
-    // Update ukuran dan margin
     card.style.width = cardW + 'px';
     card.style.height = cardW + 'px';
     card.style.marginLeft = ml + 'px';
 
-    // Di luar jangkauan visual
     if (absOff > 3) {
       gsap.killTweensOf(card);
       card.style.opacity = '0';
@@ -985,49 +886,29 @@ function updateCarousel(instant) {
     var targetBlur = absOff * 2;
 
     gsap.killTweensOf(card);
-
     if (instant) {
-      // Posisikan langsung tanpa animasi (saat init)
-      gsap.set(card, {
-        x: targetX,
-        scale: targetScale,
-        opacity: targetOpacity,
-        filter: 'blur(' + targetBlur + 'px)'
-      });
+      gsap.set(card, { x: targetX, scale: targetScale, opacity: targetOpacity, filter: 'blur(' + targetBlur + 'px)' });
     } else {
-      gsap.to(card, {
-        x: targetX,
-        scale: targetScale,
-        opacity: targetOpacity,
-        filter: 'blur(' + targetBlur + 'px)',
-        duration: 0.45,
-        ease: 'power2.out',
-        overwrite: true
-      });
+      gsap.to(card, { x: targetX, scale: targetScale, opacity: targetOpacity, filter: 'blur(' + targetBlur + 'px)', duration: 0.45, ease: 'power2.out', overwrite: true });
     }
   }
 }
 
 /* ==========================================================
-   VISUALIZER
+   VISUALIZER & PROGRESS
    ========================================================== */
 function updateVisualizer() {
   var bars = dom.visualizer.children;
   if (!state.isPlaying) return;
   var t = performance.now() * 0.003;
   for (var i = 0; i < bars.length; i++) {
-    var h = 3 + Math.abs(Math.sin(t + i * 0.55)) * 20 + Math.random() * 5;
-    bars[i].style.height = h + 'px';
+    bars[i].style.height = (3 + Math.abs(Math.sin(t + i * 0.55)) * 20 + Math.random() * 5) + 'px';
   }
 }
 
-/* ==========================================================
-   PROGRESS BAR
-   ========================================================== */
 function updateProgress() {
   if (state.duration > 0 && isFinite(state.duration)) {
-    var pct = Math.min(100, (state.currentTime / state.duration) * 100);
-    dom.progressFill.style.width = pct + '%';
+    dom.progressFill.style.width = Math.min(100, (state.currentTime / state.duration) * 100) + '%';
     dom.timeCurrent.textContent = formatTime(state.currentTime);
   }
 }
@@ -1036,11 +917,8 @@ function updateProgress() {
    HUD
    ========================================================== */
 function updateHUDTime() {
-  var now = new Date();
-  dom.hudTime.textContent =
-    String(now.getHours()).padStart(2,'0') + ':' +
-    String(now.getMinutes()).padStart(2,'0') + ':' +
-    String(now.getSeconds()).padStart(2,'0');
+  var n = new Date();
+  dom.hudTime.textContent = String(n.getHours()).padStart(2,'0') + ':' + String(n.getMinutes()).padStart(2,'0') + ':' + String(n.getSeconds()).padStart(2,'0');
 }
 
 function updateFPS() {
@@ -1063,7 +941,7 @@ function updateTrackingStatus() {
     dom.hudTracking.classList.remove('active');
     dom.trackingText.textContent = 'NO HAND';
     state.noHandTimer += 16;
-    dom.handPrompt.style.opacity = state.noHandTimer > NO_HAND_DELAY && state.mediapipeReady ? '1' : '0';
+    dom.handPrompt.style.opacity = (state.noHandTimer > NO_HAND_DELAY && state.mediapipeReady) ? '1' : '0';
   }
 }
 
@@ -1085,38 +963,18 @@ dom.btnPlay.addEventListener('click', togglePlay);
 dom.btnNext.addEventListener('click', nextSong);
 dom.btnPrev.addEventListener('click', prevSong);
 
-dom.progressTrack.addEventListener('click', function(e) {
+// Progress bar click & drag
+var isDragging = false;
+function handleProgressInput(clientX) {
   var rect = dom.progressTrack.getBoundingClientRect();
-  var ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-  seekTo(ratio);
-});
-
-// Drag pada progress bar
-var isDraggingProgress = false;
-dom.progressTrack.addEventListener('mousedown', function(e) {
-  isDraggingProgress = true;
-  var rect = dom.progressTrack.getBoundingClientRect();
-  seekTo(Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)));
-});
-document.addEventListener('mousemove', function(e) {
-  if (!isDraggingProgress) return;
-  var rect = dom.progressTrack.getBoundingClientRect();
-  seekTo(Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)));
-});
-document.addEventListener('mouseup', function() { isDraggingProgress = false; });
-
-// Touch drag pada progress bar
-dom.progressTrack.addEventListener('touchstart', function(e) {
-  isDraggingProgress = true;
-  var rect = dom.progressTrack.getBoundingClientRect();
-  seekTo(Math.max(0, Math.min(1, (e.touches[0].clientX - rect.left) / rect.width)));
-}, { passive: true });
-document.addEventListener('touchmove', function(e) {
-  if (!isDraggingProgress) return;
-  var rect = dom.progressTrack.getBoundingClientRect();
-  seekTo(Math.max(0, Math.min(1, (e.touches[0].clientX - rect.left) / rect.width)));
-}, { passive: true });
-document.addEventListener('touchend', function() { isDraggingProgress = false; });
+  seekTo(Math.max(0, Math.min(1, (clientX - rect.left) / rect.width)));
+}
+dom.progressTrack.addEventListener('mousedown', function(e) { isDragging = true; handleProgressInput(e.clientX); });
+document.addEventListener('mousemove', function(e) { if (isDragging) handleProgressInput(e.clientX); });
+document.addEventListener('mouseup', function() { isDragging = false; });
+dom.progressTrack.addEventListener('touchstart', function(e) { isDragging = true; handleProgressInput(e.touches[0].clientX); }, { passive: true });
+document.addEventListener('touchmove', function(e) { if (isDragging) handleProgressInput(e.touches[0].clientX); }, { passive: true });
+document.addEventListener('touchend', function() { isDragging = false; });
 
 // Instructions toggle
 dom.btnInstructions.addEventListener('click', function(e) {
@@ -1126,30 +984,25 @@ dom.btnInstructions.addEventListener('click', function(e) {
     dom.instructions.style.display = 'block';
     gsap.fromTo(dom.instructions, { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.25 });
   } else {
-    gsap.to(dom.instructions, { opacity: 0, y: 8, duration: 0.2,
-      onComplete: function() { dom.instructions.style.display = 'none'; }
-    });
+    gsap.to(dom.instructions, { opacity: 0, y: 8, duration: 0.2, onComplete: function() { dom.instructions.style.display = 'none'; } });
   }
 });
 
 // Keyboard
 document.addEventListener('keydown', function(e) {
-  switch(e.code) {
-    case 'Space': e.preventDefault(); togglePlay(); break;
-    case 'ArrowRight': nextSong(); break;
-    case 'ArrowLeft': prevSong(); break;
-  }
+  if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
+  else if (e.code === 'ArrowRight') nextSong();
+  else if (e.code === 'ArrowLeft') prevSong();
 });
 
-// Touch swipe pada carousel (mobile fallback)
-var touchStartX = 0, touchStartY = 0;
+// Touch swipe pada carousel
+var touchSX = 0, touchSY = 0;
 dom.carouselContainer.addEventListener('touchstart', function(e) {
-  touchStartX = e.touches[0].clientX;
-  touchStartY = e.touches[0].clientY;
+  touchSX = e.touches[0].clientX; touchSY = e.touches[0].clientY;
 }, { passive: true });
 dom.carouselContainer.addEventListener('touchend', function(e) {
-  var dx = e.changedTouches[0].clientX - touchStartX;
-  var dy = e.changedTouches[0].clientY - touchStartY;
+  var dx = e.changedTouches[0].clientX - touchSX;
+  var dy = e.changedTouches[0].clientY - touchSY;
   if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.5) {
     if (dx < 0) nextSong(); else prevSong();
   }
